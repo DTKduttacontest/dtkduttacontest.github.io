@@ -30,6 +30,29 @@ section, summary, time, mark, audio, video {
     height: 260px;
 }
 
+.slideshow-container {
+    position: relative;
+    width: 100%;
+    height: 400px;
+    overflow: hidden;
+    border-radius: 10px;
+    margin-bottom: 2em;
+}
+
+.slide {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+
+    opacity: 0;
+    transition: opacity 1s ease-in-out;
+}
+
+.slide.active {
+    opacity: 1;
+}
+
 .spotlight .image img {
     width: 100%;
     height: 100%;
