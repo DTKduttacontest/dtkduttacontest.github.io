@@ -9,16 +9,17 @@
 	</head>
 
 	<script>
-		document.addEventListener("DOMContentLoaded", function() {
-		    let slides = document.querySelectorAll(".slide");
-		    let current = 0;
-		    setInterval(function() {
-		        slides[current].classList.remove("active");
-		        current = (current + 1) % slides.length;
-		        slides[current].classList.add("active");
-		    }, 4000);
-		});
+	document.addEventListener("DOMContentLoaded", function() {
+		const slides = document.querySelectorAll(".banner-slide");
+		let current = 0;
+		setInterval(() => {
+			slides[current].classList.remove("active");
+			current = (current + 1) % slides.length;
+			slides[current].classList.add("active");
+		}, 5000);
+	});
 	</script>
+	
 	<body>
 
 		<!-- Page Wrapper -->
@@ -48,33 +49,31 @@
 
 				<!-- Banner -->
 					<section id="banner">
-						<div class="inner">
-
-							<div class="slideshow-container">
-							    <img class="slide active" src="images/banner1.jpg" alt="">
-							    <img class="slide" src="images/banner2.jpg" alt="">
-							    <img class="slide" src="images/banner3.jpg" alt="">
-							    <img class="slide" src="images/banner4.jpg" alt="">
-							    <img class="slide" src="images/banner5.jpg" alt="">
-							</div>
-							
-							<!-- <div class="logo"><span class="icon fa-gem"></span></div> -->
-							<h2>DTK Dutta Contest</h2>
-							<p>An annual contest reconnecting <a href="https://en.wikipedia.org/wiki/Bhagalpur">Bhagalpur's</a> youth with their heritage through research, curiosity, and inquiry</a></p>
-						
-							<div class="announcement">
-								<strong>Latest:</strong>
-								Our research contest has been featured by <em>Citizen Times</em>
-								<a href="https://www.youtube.com/watch?v=UC8y3TRYU3A">(see here)</a>
-								and <em>Jagran</em>
-								<a href="https://www.jagran.com/bihar/bhagalpur-dtk-dutta-contest-bhagalpur-students-social-research-impact-40152360.html">(here)</a>.
-							</div>
-
-							<div class="announcement">
-								<strong>Update:</strong>
-								<a href="archives.html">Winners of the 2025 contest have been announced!</a>
-							</div>
-
+					    <div class="banner-slideshow">
+					        <img class="banner-slide active" src="images/banner1.jpg" alt="">
+					        <img class="banner-slide" src="images/banner2.jpg" alt="">
+					        <img class="banner-slide" src="images/banner3.jpg" alt="">
+					        <img class="banner-slide" src="images/banner4.jpg" alt="">
+					        <img class="banner-slide" src="images/banner5.jpg" alt="">
+					    </div>
+					
+					    <div class="inner">
+					        <h2>DTK Dutta Contest</h2>
+					        <p>
+					            An annual contest reconnecting
+					            <a href="https://en.wikipedia.org/wiki/Bhagalpur">Bhagalpur's</a>
+					            youth with their heritage through research,
+					            curiosity, and inquiry.
+					        </p>
+					
+					        <!-- <div class="announcement">
+					            <strong>Latest:</strong>
+					            Our research contest has been featured by
+					            <em>Citizen Times</em>
+					            <a href="https://www.youtube.com/watch?v=UC8y3TRYU3A">(see here)</a>
+					            and <em>Jagran</em>
+					            <a href="https://www.jagran.com/bihar/bhagalpur-dtk-dutta-contest-bhagalpur-students-social-research-impact-40152360.html">(here)</a>.
+					        </div> -->
 						</div>
 					</section>
 
@@ -112,11 +111,9 @@
 						        <p>
 						            The DTK Dutta Contest is funded through the generosity of some of the mentors 
 									who believe in nurturing curiosity and research among Bhagalpur's youth.
-						        </p>						
-						        <p>
-						            Your contribution can help fund student prizes, mentorship,
+									Your contribution can help fund student prizes, mentorship,
 						            outreach, and educational resources.
-						        </p>
+						        </p>						
 						        <a href="YOUR_GOFUNDME_LINK"
 						           target="_blank"
 						           class="button primary">
@@ -172,7 +169,7 @@
 							                <a href="https://www.youtube.com/watch?v=UC8y3TRYU3A"
 							                   target="_blank"
 							                   class="special">
-							                    Read More
+							                    See More
 							                </a>
 							            </article>
 							            <article>
@@ -193,7 +190,6 @@
 							                </a>
 										</article>
 							        </section>
-							
 							    </div>
 							</section>
 
