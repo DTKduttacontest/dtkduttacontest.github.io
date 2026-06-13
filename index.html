@@ -7,6 +7,18 @@
 		<link rel="stylesheet" href="assets/css/main.css" />
 		<noscript><link rel="stylesheet" href="assets/css/noscript.css" /></noscript>
 	</head>
+
+	<script>
+		document.addEventListener("DOMContentLoaded", function() {
+		    let slides = document.querySelectorAll(".slide");
+		    let current = 0;
+		    setInterval(function() {
+		        slides[current].classList.remove("active");
+		        current = (current + 1) % slides.length;
+		        slides[current].classList.add("active");
+		    }, 4000);
+		});
+	</script>
 	<body>
 
 		<!-- Page Wrapper -->
@@ -37,6 +49,15 @@
 				<!-- Banner -->
 					<section id="banner">
 						<div class="inner">
+
+							<div class="slideshow-container">
+							    <img class="slide active" src="images/banner1.jpg" alt="">
+							    <img class="slide" src="images/banner2.jpg" alt="">
+							    <img class="slide" src="images/banner3.jpg" alt="">
+							    <img class="slide" src="images/banner4.jpg" alt="">
+							    <img class="slide" src="images/banner5.jpg" alt="">
+							</div>
+							
 							<!-- <div class="logo"><span class="icon fa-gem"></span></div> -->
 							<h2>DTK Dutta Contest</h2>
 							<p>An annual contest reconnecting <a href="https://en.wikipedia.org/wiki/Bhagalpur">Bhagalpur's</a> youth with their heritage through research, curiosity, and inquiry</a></p>
