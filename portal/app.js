@@ -675,7 +675,8 @@ async function putStagingPdf(stagingPath, file, onProgress) {
   // Supabase recommends its resumable TUS route for files above 6 MB and for
   // unreliable connections. This keeps the student/mentor side resumable too;
   // the later Google Drive transfer happens only from the secure server.
-  const tus = window.tus;\n  if (!tus?.Upload) throw new Error("The secure upload component could not be loaded. Refresh the page and try again.");
+  const tus = window.tus;
+  if (!tus?.Upload) throw new Error("The secure upload component could not be loaded. Refresh the page and try again.");
   const projectHost = new URL(PORTAL_CONFIG.supabaseUrl).hostname.replace(".supabase.co", ".storage.supabase.co");
   const endpoint = `https://${projectHost}/storage/v1/upload/resumable`;
   onProgress(3);
