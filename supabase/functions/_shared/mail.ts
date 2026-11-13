@@ -1,19 +1,84 @@
 import { requiredEnv } from "./portal.ts";
 
+type RelayRequest = {
+  request_id: string;
+  applicant_name: string;
+  applicant_email: string;
+  code: string;
+  timestamp: number;
+  nonce: string;
+  signature: string;
+};
+
+/**
+ * Sends mentor-approval notices through the contest Gmail's protected Apps
+ * Script relay. The public endpoint accepts only short-lived HMAC-signed
+ * requests and never accepts a recipient address.
+ */
 export async function sendApprovalCodeEmail(input: { applicantName: string; applicantEmail: string; code: string }) {
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { "Authorization": `Bearer ${requiredEnv("RESEND_API_KEY")}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      from: requiredEnv("MAIL_FROM"),
-      to: [requiredEnv("MENTOR_APPROVER_EMAIL")],
-      subject: "DTK Dutta Contest: mentor approval code",
-      html: `<h2>Mentor approval requested</h2><p><strong>${escapeHtml(input.applicantName)}</strong> (${escapeHtml(input.applicantEmail)}) has verified their own email and requested mentor access.</p><p>Enter this code inside the signed-in super-admin portal within 15 minutes:</p><p style="font-size:28px;letter-spacing:4px;font-weight:700">${input.code}</p><p>Do not forward this code to the applicant.</p>`,
-    }),
-  });
-  if (!response.ok) throw new Error("The mentor approval code could not be sent to the contest email.");
+  const request: Omit<RelayRequest, "signature"> = {
+    request_id: crypto.randomUUID(),
+    applicant_name: input.applicantName,
+    applicant_email: input.applicantEmail,
+    code: input.code,
+    timestamp: Math.floor(Date.now() / 1000),
+    nonce: randomNonce(),
+  };
+  const signature = await hmacHex(
+    requiredEnv("GOOGLE_APPS_SCRIPT_MAIL_RELAY_SECRET"),
+    canonicalRequest(request),
+  );
+
+  let response: Response;
+  try {
+    response = await fetch(requiredEnv("GOOGLE_APPS_SCRIPT_MAIL_RELAY_URL"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...request, signature }),
+    });
+  } catch {
+    throw new Error("The mentor approval email could not be sent to the contest email.");
+  }
+
+  if (!response.ok) throw new Error("The mentor approval email could not be sent to the contest email.");
+  let result: { ok?: unknown } | null = null;
+  try {
+    result = await response.json();
+  } catch {
+    // Apps Script can return an HTML error page when a deployment is changed
+    // or disabled. Treat that as a delivery failure rather than accepting an
+    // uncertain result.
+  }
+  if (result?.ok !== true) throw new Error("The mentor approval email could not be sent to the contest email.");
 }
 
-function escapeHtml(value: string) {
-  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+function canonicalRequest(request: Omit<RelayRequest, "signature">) {
+  return [
+    "v1",
+    request.request_id,
+    request.applicant_name,
+    request.applicant_email,
+    request.code,
+    String(request.timestamp),
+    request.nonce,
+  ].map((value) => encodeURIComponent(value)).join("\n");
+}
+
+async function hmacHex(secret: string, value: string) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(value));
+  return [...new Uint8Array(signature)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function randomNonce() {
+  const bytes = crypto.getRandomValues(new Uint8Array(24));
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }

@@ -14,20 +14,33 @@ Deno.serve(async (request) => {
     if (userError || !userData.user) return error("Your sign-in session has expired. Please sign in again.", 401);
     const user = userData.user;
     if (!user.email || !user.email_confirmed_at) return error("Verify your email address before creating a portal profile.", 403);
+
     const superAdminEmail = requiredEnv("MENTOR_APPROVER_EMAIL").trim().toLowerCase();
     const normalizedEmail = user.email.trim().toLowerCase();
     const submittedDetails = await requestJson(request) as Record<string, unknown>;
-    // The exact contest Gmail becomes the bootstrap administrator regardless of
-    // which radio option was selected during its own sign-up.
     const details = validateStudentDetails(normalizedEmail === superAdminEmail
       ? { ...submittedDetails, requested_role: "mentor" }
       : submittedDetails);
+
     const admin = adminClient();
     const { data: existing, error: existingError } = await admin.from("profiles").select("*").eq("id", user.id).maybeSingle();
     if (existingError) throw new Error("The existing profile could not be checked.");
-    if (existing) return json({ role: existing.role, account_status: existing.role, profile: existing });
+    if (existing) {
+      let approvalEmailSent = true;
+      if (existing.role === "mentor_pending") {
+        const { data: approval } = await admin
+          .from("mentor_approval_requests")
+          .select("status, expires_at")
+          .eq("applicant_id", user.id)
+          .maybeSingle();
+        approvalEmailSent = approval?.status === "pending"
+          && new Date(approval.expires_at).getTime() > Date.now();
+      }
+      return json({ role: existing.role, account_status: existing.role, profile: existing, approval_email_sent: approvalEmailSent });
+    }
 
     const role = normalizedEmail === superAdminEmail ? "admin" : details.requestedRole === "mentor" ? "mentor_pending" : "student";
+    let approvalEmailSent = true;
     const profile = {
       id: user.id,
       display_name: details.displayName,
@@ -55,15 +68,18 @@ Deno.serve(async (request) => {
       }
       try {
         await sendApprovalCodeEmail({ applicantName: details.displayName, applicantEmail: normalizedEmail, code });
-      } catch (mailError) {
-        await admin.from("mentor_approval_requests").delete().eq("applicant_id", user.id);
-        await admin.from("profiles").delete().eq("id", user.id);
-        throw mailError;
+      } catch {
+        // Keep the verified profile and request visible if delivery is
+        // temporarily unavailable. Mark this code unusable so a fresh one is
+        // required once delivery is repaired.
+        approvalEmailSent = false;
+        await admin.from("mentor_approval_requests").update({ status: "expired" }).eq("applicant_id", user.id).eq("status", "pending");
+        await admin.from("audit_events").insert({ actor_id: user.id, event_type: "mentor_approval_notification_failed", target_id: user.id });
       }
     }
 
     await admin.from("audit_events").insert({ actor_id: user.id, event_type: role === "mentor_pending" ? "mentor_requested" : "profile_created", target_id: user.id });
-    return json({ role, account_status: role, profile });
+    return json({ role, account_status: role, profile, approval_email_sent: approvalEmailSent });
   } catch (caught) {
     return error(caught instanceof Error ? caught.message : "Profile creation failed.", 400);
   }

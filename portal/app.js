@@ -308,22 +308,28 @@ async function completeProfile(registration) {
   state.pendingEmail = "";
   state.pendingRegistration = null;
   if (data?.account_status === "mentor_pending") {
-    renderPendingMentor();
+    renderPendingMentor({ approvalEmailSent: data?.approval_email_sent !== false });
     return;
   }
   await bootAuthenticated();
 }
 
-function renderPendingMentor() {
+function renderPendingMentor({ approvalEmailSent = true } = {}) {
+  const deliveryNotice = approvalEmailSent
+    ? "A single-use approval code has been sent to the DTK Dutta Contest super-admin. Your mentor account will become active only after that code is confirmed inside the portal."
+    : "Your request is saved, but the contest-admin notification did not go through. You can safely request a fresh code below."
+  const helpText = approvalEmailSent
+    ? "Use this only if 15 minutes have passed or the original code was locked after several incorrect entries."
+    : "Your verified request is safely saved. Do not create another account; request a fresh code now."
   app.innerHTML = `
     <div class="portal-shell">
       <section class="portal-card" style="max-width: 700px; margin: 3rem auto; padding: 1.5rem;">
         <p class="portal-eyebrow">Mentor request received</p>
         <h1 style="font-size: clamp(2rem, 4vw, 2.8rem);">Your email is verified. One approval remains.</h1>
-        <p class="portal-lede">A single-use approval code has been sent to the DTK Dutta Contest super-admin. Your mentor account will become active only after that code is confirmed inside the portal.</p>
+        <p class="portal-lede">${escapeHtml(deliveryNotice)}</p>
         <div class="portal-notice portal-warning">You do not need to send us your password or forward your own verification code. The approval code is for the contest administrator only.</div>
         <div class="portal-button-row"><button class="portal-button portal-secondary" id="request-fresh-approval" type="button">Request a fresh code</button><button class="portal-button" id="pending-sign-out" type="button">Sign out</button></div>
-        <p id="pending-approval-message" class="portal-form-message">Use this only if 15 minutes have passed or the original code was locked after several incorrect entries.</p>
+        <p id="pending-approval-message" class="portal-form-message">${escapeHtml(helpText)}</p>
       </section>
     </div>`;
   document.querySelector("#request-fresh-approval").addEventListener("click", async (event) => {
@@ -354,7 +360,10 @@ async function bootAuthenticated() {
     return;
   }
   state.profile = profile;
-  if (profile.role === "mentor_pending") return renderPendingMentor();
+  if (profile.role === "mentor_pending") {
+    await completeProfile(profileDataFromMetadata(session.user));
+    return;
+  }
   await loadDashboard();
 }
 
@@ -754,7 +763,7 @@ async function renderMentorApprovals() {
   const response = await invokeFunction("list-mentor-approvals", {});
   if (response.error) return renderErrorPage(humanError(response.error.message));
   const requests = response.data?.requests || [];
-  app.innerHTML = `<div class="portal-shell"><button class="portal-back-link" id="back-dashboard" type="button">← Back to dashboard</button><section class="portal-panel"><p class="portal-eyebrow">Super-admin only</p><h1 style="font-size:clamp(2rem,4vw,3rem);">Mentor approvals</h1><p class="portal-lede">A mentor applicant must verify their own email first. The one-time code shown in this list must match the code delivered to ${escapeHtml(PORTAL_CONFIG.supportEmail)}.</p>${requests.length ? `<div class="portal-submission-list">${requests.map((request) => `<article class="portal-submission-item"><span><strong>${escapeHtml(request.display_name)}</strong><span>${escapeHtml(request.email)} · requested ${formatDate(request.created_at, true)}</span></span><button class="portal-button" type="button" data-approve-mentor="${request.id}">Approve</button></article>`).join("")}</div>` : `<p class="portal-muted">There are no pending mentor requests.</p>`}</section></div>`;
+  app.innerHTML = `<div class="portal-shell"><button class="portal-back-link" id="back-dashboard" type="button">← Back to dashboard</button><section class="portal-panel"><p class="portal-eyebrow">Super-admin only</p><h1 style="font-size:clamp(2rem,4vw,3rem);">Mentor approvals</h1><p class="portal-lede">A mentor applicant must verify their own email first. A pending request has a one-time code in ${escapeHtml(PORTAL_CONFIG.supportEmail)}. An expired request needs a fresh code before it can be approved.</p>${requests.length ? `<div class="portal-submission-list">${requests.map((request) => { const ready = request.status === "pending"; return `<article class="portal-submission-item"><span><strong>${escapeHtml(request.display_name)}</strong><span>${escapeHtml(request.email)} · requested ${formatDate(request.created_at, true)} · ${ready ? "code sent — waiting for approval" : "needs a fresh code"}</span></span>${ready ? `<button class="portal-button" type="button" data-approve-mentor="${request.id}">Approve</button>` : `<span class="portal-muted portal-small">Ask the applicant to request a fresh code.</span>`}</article>`; }).join("")}</div>` : `<p class="portal-muted">There are no mentor requests.</p>`}</section></div>`;
   document.querySelector("#back-dashboard").addEventListener("click", loadDashboard);
   document.querySelectorAll("[data-approve-mentor]").forEach((button) => button.addEventListener("click", () => promptMentorApproval(button.dataset.approveMentor)));
 }

@@ -14,8 +14,8 @@ functionsUrl: "https://YOUR-PROJECT.supabase.co/functions/v1",
 ```
 
 The anon key is designed to be public. Never put a Supabase service-role key,
-Google OAuth secret or refresh token, Resend key, or approval-code pepper in
-this repository or in `portal-config.js`.
+Google OAuth secret or refresh token, Apps Script relay secret, or approval-code
+pepper in this repository or in `portal-config.js`.
 
 ## One-time server setup
 
@@ -45,10 +45,10 @@ this repository or in `portal-config.js`.
    GOOGLE_CLIENT_ID
    GOOGLE_CLIENT_SECRET
    GOOGLE_REFRESH_TOKEN
-   RESEND_API_KEY
-   MAIL_FROM
    MENTOR_APPROVER_EMAIL=dtkduttacontest@gmail.com
    APPROVAL_CODE_PEPPER=<a long random value>
+   GOOGLE_APPS_SCRIPT_MAIL_RELAY_URL=<the deployed Apps Script /exec URL>
+   GOOGLE_APPS_SCRIPT_MAIL_RELAY_SECRET=<the same long random value stored in Apps Script>
    ```
 
 6. In Google Cloud, create OAuth credentials and authorize an **offline**
@@ -56,9 +56,13 @@ this repository or in `portal-config.js`.
    Use the narrow `drive.file` scope. Store the refresh token only as the
    `GOOGLE_REFRESH_TOKEN` Edge Function secret. The portal uses that account
    to own the private Drive files.
-7. Set a verified `MAIL_FROM` sender in Resend. The separate mentor-approval
-   code is sent to `dtkduttacontest@gmail.com` through Resend; ordinary
-   student verification emails are sent through Supabase's configured SMTP.
+7. Deploy `apps-script/mentor-mail-relay/Code.gs` as a Web app owned by
+   `dtkduttacontest@gmail.com`, running as that account and available to
+   anyone. Set its `DTK_MAIL_RELAY_SECRET_V2` Script Property to the same
+   value as `GOOGLE_APPS_SCRIPT_MAIL_RELAY_SECRET`. The separate mentor-
+   approval code is sent only to that contest Gmail through this protected
+   relay; ordinary student verification emails are sent through Supabase's
+   configured SMTP.
 
 ## First use
 
