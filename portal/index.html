@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="DTK Dutta Contest student and mentor workbook portal." />
+    <title>Student &amp; Mentor Portal | DTK Dutta Contest</title>
+    <link rel="stylesheet" href="portal.css" />
+  </head>
+  <body>
+    <a class="portal-skip-link" href="#portal-app">Skip to portal</a>
+    <header class="portal-site-bar">
+      <a class="portal-brand" href="../index.html" aria-label="Return to the DTK Dutta Contest main site">
+        <span class="portal-brand-mark" aria-hidden="true">D</span>
+        <span>
+          <strong>DTK Dutta Contest</strong>
+          <small>Student &amp; Mentor Portal</small>
+        </span>
+      </a>
+      <nav aria-label="Portal navigation">
+        <a href="../index.html">Main site</a>
+        <a href="../contest.html">Contest</a>
+        <a href="../mentors.html">Mentors</a>
+      </nav>
+    </header>
+
+    <main id="portal-app" tabindex="-1">
+      <section class="portal-loading" aria-live="polite">
+        <span class="portal-loading-dot"></span>
+        Loading the portal…
+      </section>
+    </main>
+
+    <noscript>
+      <section class="portal-noscript">This portal needs JavaScript for secure sign-in and PDF submission.</section>
+    </noscript>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
