@@ -60,20 +60,94 @@ export async function createPdfFile(accessToken: string, parentId: string, name:
   return await response.json() as DriveFile;
 }
 
-export async function createResumableUpload(accessToken: string, fileId: string, byteSize: number) {
-  const response = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${encodeURIComponent(fileId)}?uploadType=resumable&fields=id,name,mimeType,parents,size,createdTime`, {
+/**
+ * Upload a verified staging PDF from the server to its final Drive file.
+ *
+ * Drive recommends resumable uploads for files over 5 MB.  The entire
+ * exchange stays server-to-server: the browser never receives the Google
+ * session URL, so Drive's browser CORS behaviour cannot interrupt a student
+ * or mentor upload.  Four-MiB chunks are exact multiples of Drive's required
+ * 256-KiB chunk unit and keep every individual transfer comfortably small.
+ */
+export async function uploadPdfContent(accessToken: string, fileId: string, bytes: Uint8Array) {
+  const initiation = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${encodeURIComponent(fileId)}?uploadType=resumable&fields=id,name,mimeType,parents,size,createdTime`, {
     method: "PATCH",
     headers: {
       "Authorization": `Bearer ${accessToken}`,
-      "Content-Type": "application/json; charset=UTF-8",
       "X-Upload-Content-Type": "application/pdf",
-      "X-Upload-Content-Length": String(byteSize),
+      "X-Upload-Content-Length": String(bytes.byteLength),
+      "Content-Length": "0",
     },
-    body: "{}",
   });
-  const location = response.headers.get("Location");
-  if (!response.ok || !location) throw new Error("Google Drive could not prepare the upload.");
-  return location;
+  const sessionUrl = initiation.headers.get("Location");
+  if (!initiation.ok || !sessionUrl) throw new Error("Google Drive could not start a reliable PDF upload.");
+
+  const total = bytes.byteLength;
+  const chunkSize = 4 * 1024 * 1024;
+  let start = 0;
+  let retries = 0;
+
+  while (start < total) {
+    const endExclusive = Math.min(start + chunkSize, total);
+    const chunk = bytes.slice(start, endExclusive);
+    const response = await fetch(sessionUrl, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Length": String(chunk.byteLength),
+        "Content-Range": `bytes ${start}-${endExclusive - 1}/${total}`,
+      },
+      body: chunk,
+    });
+
+    if (response.ok) return await response.json() as DriveFile;
+
+    if (response.status === 308) {
+      const range = response.headers.get("Range");
+      const match = range?.match(/bytes=0-(\d+)/i);
+      // Drive omits Range only when it has not confirmed any bytes yet.
+      // Restarting at zero is safe; advancing would risk skipping data.
+      start = match ? Number(match[1]) + 1 : 0;
+      retries = 0;
+      continue;
+    }
+
+    // A resumable session lets us safely ask Drive how much it actually
+    // received after a transient server/network failure before retrying.
+    if (response.status >= 500 && response.status < 600 && retries < 2) {
+      retries += 1;
+      const status = await fetch(sessionUrl, {
+        method: "PUT",
+        headers: {
+          "Content-Length": "0",
+          "Content-Range": `bytes */${total}`,
+        },
+      });
+      if (status.ok) return await getDriveFile(accessToken, fileId);
+      if (status.status === 308) {
+        const range = status.headers.get("Range");
+        const match = range?.match(/bytes=0-(\d+)/i);
+        start = match ? Number(match[1]) + 1 : 0;
+        continue;
+      }
+    }
+
+    throw new Error("Google Drive could not save the PDF.");
+  }
+
+  // The final response normally returns the file metadata. This defensive
+  // fallback only applies if Drive reports every chunk as incomplete.
+  return await getDriveFile(accessToken, fileId);
+}
+
+export async function readAndValidateStagingPdf(admin: SupabaseClient, stagingPath: string, expectedSize: number) {
+  const { data, error } = await admin.storage.from("portal-staging").download(stagingPath);
+  if (error || !data) throw new Error("The uploaded PDF could not be read from secure staging storage.");
+  if (data.size !== expectedSize) throw new Error("The uploaded PDF size does not match the selected file.");
+  const bytes = new Uint8Array(await data.arrayBuffer());
+  const signature = new TextDecoder().decode(bytes.slice(0, 5));
+  if (signature !== "%PDF-") throw new Error("The uploaded file does not contain a valid PDF signature.");
+  return bytes;
 }
 
 export async function getDriveFile(accessToken: string, fileId: string) {
