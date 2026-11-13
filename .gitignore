@@ -1,0 +1,8 @@
+# Local credentials and deployment notes must never be published with this site.
+.env
+.env.*
+!.env.example
+supabase/.env
+supabase/.env.*
+!supabase/.env.example
+.DS_Store
