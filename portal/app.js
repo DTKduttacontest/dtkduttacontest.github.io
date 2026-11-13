@@ -612,10 +612,9 @@ async function submitStudentPdf(event, subject) {
       mime_type: file.type || "application/pdf",
     });
     if (started.error) throw started.error;
-    const uploadResult = await putFile(started.data.upload_url, file, (percent) => updateProgress(progress, percent));
+    await putStagingPdf(started.data.staging_path, file, (percent) => updateProgress(progress, percent));
     const finished = await invokeFunction("finish-submission-upload", {
       submission_id: started.data.submission_id,
-      drive_file_id: uploadResult.id,
     });
     if (finished.error) throw finished.error;
     setMessage(message, "Your PDF has been submitted and dated by the portal.", "success");
@@ -647,10 +646,9 @@ async function submitWorkbookPdf(event, subject) {
       mime_type: file.type || "application/pdf",
     });
     if (started.error) throw started.error;
-    const uploadResult = await putFile(started.data.upload_url, file, (percent) => updateProgress(progress, percent));
+    await putStagingPdf(started.data.staging_path, file, (percent) => updateProgress(progress, percent));
     const finished = await invokeFunction("finish-workbook-upload", {
       workbook_version_id: started.data.workbook_version_id,
-      drive_file_id: uploadResult.id,
     });
     if (finished.error) throw finished.error;
     await loadDashboard();
@@ -671,23 +669,44 @@ async function validatePdf(file) {
   return "";
 }
 
-function putFile(url, file, onProgress) {
-  return new Promise((resolve, reject) => {
-    const request = new XMLHttpRequest();
-    request.open("PUT", url, true);
-    request.setRequestHeader("Content-Type", "application/pdf");
-    request.upload.onprogress = (event) => {
-      if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100));
-    };
-    request.onload = () => {
-      if (request.status >= 200 && request.status < 300) {
-        try { resolve(JSON.parse(request.responseText)); } catch { reject(new Error("The file was uploaded but the server response was incomplete.")); }
-      } else {
-        reject(new Error(`Upload failed (${request.status}). Please try again.`));
-      }
-    };
-    request.onerror = () => reject(new Error("The connection was interrupted during upload."));
-    request.send(file);
+async function putStagingPdf(stagingPath, file, onProgress) {
+  if (!stagingPath || !state.session) throw new Error("The secure upload session could not be started. Please try again.");
+
+  // Supabase recommends its resumable TUS route for files above 6 MB and for
+  // unreliable connections. This keeps the student/mentor side resumable too;
+  // the later Google Drive transfer happens only from the secure server.
+  const tus = await import("https://esm.sh/tus-js-client@4.3.1?bundle");
+  const projectHost = new URL(PORTAL_CONFIG.supabaseUrl).hostname.replace(".supabase.co", ".storage.supabase.co");
+  const endpoint = `https://${projectHost}/storage/v1/upload/resumable`;
+  onProgress(3);
+
+  await new Promise((resolve, reject) => {
+    const upload = new tus.Upload(file, {
+      endpoint,
+      retryDelays: [0, 3000, 5000, 10000, 20000],
+      headers: {
+        authorization: `Bearer ${state.session.access_token}`,
+        apikey: PORTAL_CONFIG.supabaseAnonKey,
+        "x-upsert": "false",
+      },
+      uploadDataDuringCreation: true,
+      removeFingerprintOnSuccess: true,
+      chunkSize: 6 * 1024 * 1024,
+      allowedMetaFields: ["bucketName", "objectName", "contentType", "cacheControl"],
+      metadata: {
+        bucketName: "portal-staging",
+        objectName: stagingPath,
+        contentType: "application/pdf",
+        cacheControl: "0",
+      },
+      onError: (uploadError) => reject(new Error(uploadError?.message || "The secure upload was interrupted. Please try again.")),
+      onProgress: (uploaded, total) => onProgress(3 + Math.round((uploaded / total) * 69)),
+      onSuccess: () => {
+        onProgress(72);
+        resolve();
+      },
+    });
+    upload.start();
   });
 }
 
