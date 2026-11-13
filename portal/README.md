@@ -21,13 +21,14 @@ this repository or in `portal-config.js`.
 
 1. Create a Supabase project and run
    `supabase/migrations/202611120001_portal_schema.sql` in its SQL editor.
-2. Enable email/password sign-up and require email confirmation. In the
-   **Confirm signup** email template, include the code variable `{{ .Token }}`
-   and tell the user to enter that code in the portal. The portal deliberately
-   uses a code-entry screen, not a confirmation-link screen.
+2. Enable email/password sign-up and require email confirmation. The portal
+   uses Supabase's confirmation link: a student opens the link in the email,
+   returns to the portal, and the profile is created automatically. A custom
+   email template is optional; it must preserve Supabase's confirmation URL.
 3. Add `https://dtkduttacontest.github.io/portal/` as an allowed redirect URL.
-   Configure a production SMTP provider for student verification emails; the
-   default test mail service is not suitable for a live contest.
+   For a small pilot, Supabase's default confirmation email works. Configure
+   production SMTP before a large launch: its sender, branding, and delivery
+   limits need to be suitable for the number of student accounts.
 4. Deploy every function under `supabase/functions/`, including shared files:
    `complete-profile`, `list-mentor-approvals`, `approve-mentor`,
    `resend-mentor-approval`, `bootstrap-drive`, `start-submission-upload`,
