@@ -316,20 +316,20 @@ async function completeProfile(registration) {
 
 function renderPendingMentor({ approvalEmailSent = true } = {}) {
   const deliveryNotice = approvalEmailSent
-    ? "${escapeHtml(deliveryNotice)}"
+    ? "A single-use approval code has been sent to the DTK Dutta Contest super-admin. Your mentor account will become active only after that code is confirmed inside the portal."
     : "Your request is saved, but the contest-admin notification did not go through. You can safely request a fresh code below."
   const helpText = approvalEmailSent
-    ? "${escapeHtml(helpText)}"
+    ? "Use this only if 15 minutes have passed or the original code was locked after several incorrect entries."
     : "Your verified request is safely saved. Do not create another account; request a fresh code now."
   app.innerHTML = `
     <div class="portal-shell">
       <section class="portal-card" style="max-width: 700px; margin: 3rem auto; padding: 1.5rem;">
         <p class="portal-eyebrow">Mentor request received</p>
         <h1 style="font-size: clamp(2rem, 4vw, 2.8rem);">Your email is verified. One approval remains.</h1>
-        <p class="portal-lede">A single-use approval code has been sent to the DTK Dutta Contest super-admin. Your mentor account will become active only after that code is confirmed inside the portal.</p>
+        <p class="portal-lede">${escapeHtml(deliveryNotice)}</p>
         <div class="portal-notice portal-warning">You do not need to send us your password or forward your own verification code. The approval code is for the contest administrator only.</div>
         <div class="portal-button-row"><button class="portal-button portal-secondary" id="request-fresh-approval" type="button">Request a fresh code</button><button class="portal-button" id="pending-sign-out" type="button">Sign out</button></div>
-        <p id="pending-approval-message" class="portal-form-message">Use this only if 15 minutes have passed or the original code was locked after several incorrect entries.</p>
+        <p id="pending-approval-message" class="portal-form-message">${escapeHtml(helpText)}</p>
       </section>
     </div>`;
   document.querySelector("#request-fresh-approval").addEventListener("click", async (event) => {
