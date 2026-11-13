@@ -171,7 +171,7 @@ function signUpForm(defaults = {}) {
         <div class="portal-field" data-student-field><label for="section">Section <span class="portal-required">*</span></label><select id="section" name="section">${sectionOptions(defaults.section)}</select></div>
         <div class="portal-field"><label>Account type <span class="portal-required">*</span></label><div class="portal-role-choices"><label class="portal-role-choice"><input type="radio" name="role" value="student" ${defaults.requestedRole !== "mentor" ? "checked" : ""}/><strong>Student</strong><span>Submit your own work and read feedback.</span></label><label class="portal-role-choice"><input type="radio" name="role" value="mentor" ${defaults.requestedRole === "mentor" ? "checked" : ""}/><strong>Mentor</strong><span>Requires your own email verification and contest approval.</span></label></div></div>
       </div>
-      <div class="portal-button-row"><button class="portal-button" type="submit" ${portalAvailable ? "" : "disabled"}>Send verification code</button></div>
+      <div class="portal-button-row"><button class="portal-button" type="submit" ${portalAvailable ? "" : "disabled"}>Send verification email</button></div>
       <p class="portal-form-help">A mentor applicant does not get access until the contest super-admin approves the request. Student and mentor profile details are used only for this learning portal.</p>
     </form>`;
 }
@@ -207,7 +207,7 @@ function bindSignUp() {
     };
     const validationError = validateRegistration(registration);
     if (validationError) return renderLanding(validationError, "error");
-    setFormBusy(event.currentTarget, true, "Sending code…");
+    setFormBusy(event.currentTarget, true, "Sending verification email…");
     const { data, error } = await supabase.auth.signUp({
       email: registration.email,
       password: registration.password,
@@ -229,7 +229,7 @@ function bindSignUp() {
       await completeProfile(registration);
       return;
     }
-    renderVerification(registration.email, "We sent a verification code to your email address.");
+    renderVerification(registration.email, "Open the verification link in that email. You will return here and your profile will be created automatically.");
   });
 }
 
@@ -262,26 +262,14 @@ function renderVerification(email, message = "") {
   app.innerHTML = `
     <div class="portal-shell">
       <section class="portal-card" style="max-width: 620px; margin: 3rem auto;">
-        <div class="portal-auth-heading"><p class="portal-eyebrow">Verify your email</p><h2>Enter the code from your inbox</h2><p>We sent a one-time verification code to <strong>${escapeHtml(email)}</strong>.</p></div>
-        <form id="verify-form" class="portal-form" novalidate>
-          <div class="portal-field"><label for="verification-code">Verification code <span class="portal-required">*</span></label><input id="verification-code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="8" required /></div>
-          <div class="portal-button-row"><button class="portal-button" type="submit">Verify and create profile</button><button class="portal-text-button" id="back-to-signup" type="button">Back to account details</button></div>
-          <p class="portal-form-message">${escapeHtml(message)}</p>
-        </form>
+        <div class="portal-auth-heading"><p class="portal-eyebrow">Verify your email</p><h2>Check your inbox</h2><p>We sent a verification link to <strong>${escapeHtml(email)}</strong>. Open that link in this browser. When you return here, your profile will be created automatically.</p></div>
+        <div class="portal-button-row"><button class="portal-text-button" id="back-to-signup" type="button">Back to account details</button></div>
+        <p class="portal-form-message">${escapeHtml(message)}</p>
       </section>
     </div>`;
   document.querySelector("#back-to-signup").addEventListener("click", () => {
     state.authMode = "sign-up";
     renderLanding("", "", state.pendingRegistration || {});
-  });
-  document.querySelector("#verify-form").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const code = String(new FormData(event.currentTarget).get("code") || "").trim();
-    if (!/^\d{6,8}$/.test(code)) return renderVerification(email, "Enter the six- or eight-digit verification code.");
-    setFormBusy(event.currentTarget, true, "Verifying…");
-    const { data, error } = await supabase.auth.verifyOtp({ email, token: code, type: "signup" });
-    if (error || !data.session) return renderVerification(email, humanError(error?.message || "The code could not be verified."));
-    await completeProfile(state.pendingRegistration || profileDataFromMetadata(data.user));
   });
 }
 
@@ -362,8 +350,7 @@ async function bootAuthenticated() {
   const { data: profile, error } = await supabase.from("profiles").select("*").eq("id", session.user.id).maybeSingle();
   if (error) return renderLanding(humanError(error.message), "error");
   if (!profile) {
-    state.authMode = "sign-up";
-    renderLanding("Finish the profile details below to enter the portal.", "", profileDataFromMetadata(session.user));
+    await completeProfile(profileDataFromMetadata(session.user));
     return;
   }
   state.profile = profile;
@@ -803,7 +790,7 @@ function formatBytes(bytes) {
 
 function humanError(message = "") {
   const lower = String(message).toLowerCase();
-  if (lower.includes("email not confirmed")) return "Check your email and enter the verification code before signing in.";
+  if (lower.includes("email not confirmed")) return "Check your email and open the verification link before signing in.";
   if (lower.includes("invalid login")) return "That email address or password was not recognised.";
   if (lower.includes("already registered")) return "An account already exists for this email address. Sign in instead.";
   return message || "Something went wrong. Please try again.";
