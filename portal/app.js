@@ -762,6 +762,20 @@ function promptMentorApproval(requestId) {
 
 async function invokeFunction(name, body) {
   const { data, error } = await supabase.functions.invoke(name, { body });
+  if (!error) return { data, error: null };
+
+  // Supabase retains the server-written explanation on a failed Function
+  // response. Show that explanation instead of a generic status message.
+  const response = error.context;
+  if (response && typeof response.json === "function") {
+    try {
+      const payload = await response.json();
+      const message = String(payload?.error || payload?.message || "").trim();
+      if (message) return { data, error: new Error(message) };
+    } catch {
+      // Keep the original error if the response does not contain JSON.
+    }
+  }
   return { data, error };
 }
 
