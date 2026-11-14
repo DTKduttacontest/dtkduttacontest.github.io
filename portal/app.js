@@ -154,7 +154,7 @@ function signInForm() {
         <div class="portal-field portal-span-two"><label for="sign-in-email">Email address <span class="portal-required">*</span></label><input id="sign-in-email" name="email" type="email" autocomplete="email" required /></div>
         <div class="portal-field portal-span-two"><label for="sign-in-password">Password <span class="portal-required">*</span></label><input id="sign-in-password" name="password" type="password" autocomplete="current-password" required /></div>
       </div>
-      <div class="portal-button-row"><button class="portal-button" type="submit" ${portalAvailable ? "" : "disabled"}>Sign in</button></div>
+      <div class="portal-button-row"><button class="portal-button" type="submit" ${portalAvailable ? "" : "disabled"}>Sign in</button><button class="portal-text-button" id="forgot-password" type="button" ${portalAvailable ? "" : "disabled"}>Forgot password?</button></div>
       <p class="portal-form-help">If you have not verified your email yet, finish that step before signing in.</p>
     </form>`;
 }
@@ -186,6 +186,78 @@ function bindSignIn() {
     setFormBusy(event.currentTarget, true, "Signing in…");
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return renderLanding(humanError(error.message), "error");
+    await bootAuthenticated();
+  });
+  document.querySelector("#forgot-password").addEventListener("click", () => renderPasswordResetRequest());
+}
+
+function renderPasswordResetRequest(message = "", type = "") {
+  app.innerHTML = `
+    <div class="portal-shell">
+      <section class="portal-card" style="max-width: 620px; margin: 3rem auto;">
+        <div class="portal-auth-heading"><p class="portal-eyebrow">Reset your password</p><h2>Get a reset link</h2><p>Enter the email address connected to your portal account. If an account uses it, we will send a secure reset link.</p></div>
+        <form id="password-reset-request-form" class="portal-form" novalidate>
+          <div class="portal-field"><label for="reset-email">Email address <span class="portal-required">*</span></label><input id="reset-email" name="email" type="email" autocomplete="email" required /></div>
+          <div class="portal-button-row"><button class="portal-button" type="submit">Send reset link</button><button class="portal-text-button" id="back-to-signin" type="button">Back to sign in</button></div>
+          <p id="password-reset-request-message" class="portal-form-message ${type === "error" ? "portal-error" : type === "success" ? "portal-success" : ""}">${escapeHtml(message)}</p>
+        </form>
+      </section>
+    </div>`;
+  document.querySelector("#back-to-signin").addEventListener("click", () => {
+    state.authMode = "sign-in";
+    renderLanding();
+  });
+  document.querySelector("#password-reset-request-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const email = String(new FormData(event.currentTarget).get("email") || "").trim().toLowerCase();
+    const messageElement = document.querySelector("#password-reset-request-message");
+    if (!/^\S+@\S+\.\S+$/.test(email)) return setMessage(messageElement, "Enter a valid email address.", "error");
+    setFormBusy(event.currentTarget, true, "Sending…");
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}${window.location.pathname}`,
+    });
+    if (error) {
+      setMessage(messageElement, humanError(error.message), "error");
+      setFormBusy(event.currentTarget, false);
+      return;
+    }
+    setMessage(messageElement, "If an account uses that email address, a reset link is now on its way. Check the inbox and spam folder.", "success");
+    setFormBusy(event.currentTarget, false);
+  });
+}
+
+function renderChooseNewPassword(message = "", type = "") {
+  app.innerHTML = `
+    <div class="portal-shell">
+      <section class="portal-card" style="max-width: 620px; margin: 3rem auto;">
+        <div class="portal-auth-heading"><p class="portal-eyebrow">Password reset</p><h2>Choose a new password</h2><p>Choose a new password for your portal account. It must be at least 10 characters.</p></div>
+        <form id="new-password-form" class="portal-form" novalidate>
+          <div class="portal-form-grid">
+            <div class="portal-field portal-span-two"><label for="new-password">New password <span class="portal-required">*</span></label><input id="new-password" name="password" type="password" minlength="10" autocomplete="new-password" required /></div>
+            <div class="portal-field portal-span-two"><label for="confirm-password">Confirm new password <span class="portal-required">*</span></label><input id="confirm-password" name="confirmPassword" type="password" minlength="10" autocomplete="new-password" required /></div>
+          </div>
+          <div class="portal-button-row"><button class="portal-button" type="submit">Save new password</button></div>
+          <p id="new-password-message" class="portal-form-message ${type === "error" ? "portal-error" : ""}">${escapeHtml(message)}</p>
+        </form>
+      </section>
+    </div>`;
+  document.querySelector("#new-password-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = new FormData(form);
+    const password = String(values.get("password") || "");
+    const confirmPassword = String(values.get("confirmPassword") || "");
+    const messageElement = document.querySelector("#new-password-message");
+    if (password.length < 10) return setMessage(messageElement, "Choose a password with at least 10 characters.", "error");
+    if (password !== confirmPassword) return setMessage(messageElement, "The two passwords do not match.", "error");
+    setFormBusy(form, true, "Saving…");
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) {
+      setMessage(messageElement, humanError(error.message), "error");
+      setFormBusy(form, false);
+      return;
+    }
+    window.history.replaceState({}, document.title, window.location.pathname);
     await bootAuthenticated();
   });
 }
@@ -853,6 +925,7 @@ async function signOut() {
 
 async function initialize() {
   if (!configReady) return renderLanding();
+  const recoveryLink = /(?:^|[&#])type=recovery(?:&|$)/.test(window.location.hash);
   try {
     const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
     supabase = createClient(PORTAL_CONFIG.supabaseUrl, PORTAL_CONFIG.supabaseAnonKey);
@@ -861,11 +934,22 @@ async function initialize() {
     return renderLanding("The portal interface could not be loaded. Check your internet connection and refresh.", "error");
   }
   const { data: { session } } = await supabase.auth.getSession();
-  if (session) await bootAuthenticated();
+  if (session && recoveryLink) {
+    state.session = session;
+    state.user = session.user;
+    renderChooseNewPassword();
+  } else if (session) await bootAuthenticated();
   else renderLanding();
-  supabase.auth.onAuthStateChange(async (_event, nextSession) => {
+  supabase.auth.onAuthStateChange((event, nextSession) => {
+    if (event === "PASSWORD_RECOVERY" && nextSession) {
+      state.session = nextSession;
+      state.user = nextSession.user;
+      renderChooseNewPassword();
+      return;
+    }
     if (!nextSession) return;
     state.session = nextSession;
+    state.user = nextSession.user;
   });
 }
 
